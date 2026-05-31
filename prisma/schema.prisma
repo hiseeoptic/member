@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ========================
+// AUTH (NextAuth.js)
+// ========================
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ========================
+// USER
+// ========================
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  subscription  Subscription?
+  licenseKeys   LicenseKey[]
+  referralCode  ReferralCode?
+  referredBy    Referral?      @relation("ReferredUser")
+  referrals     Referral[]     @relation("ReferrerUser")
+  payouts       Payout[]
+  usdtWallet    String?        // TRC-20 USDT wallet address
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+// ========================
+// SUBSCRIPTION
+// ========================
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status               SubscriptionStatus @default(TRIAL)
+  plan                 PlanType           @default(MONTHLY)
+  trialEndsAt          DateTime?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAt             DateTime?
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  paymentMethod        PaymentMethod      @default(STRIPE)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum PlanType {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentMethod {
+  STRIPE
+  USDT
+}
+
+// ========================
+// LICENSE KEY
+// ========================
+model LicenseKey {
+  id          String       @id @default(cuid())
+  key         String       @unique
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      LicenseStatus @default(ACTIVE)
+  deviceId    String?      // Chrome extension device fingerprint
+  lastVerified DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum LicenseStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+// ========================
+// AFFILIATE / REFERRAL
+// ========================
+model ReferralCode {
+  id        String     @id @default(cuid())
+  code      String     @unique // e.g. "JOHN2024"
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clicks    Int        @default(0)
+  referrals Referral[]
+  createdAt DateTime   @default(now())
+}
+
+model Referral {
+  id              String       @id @default(cuid())
+  referralCodeId  String
+  referralCode    ReferralCode @relation(fields: [referralCodeId], references: [id])
+  referrerId      String
+  referrer        User         @relation("ReferrerUser", fields: [referrerId], references: [id])
+  referredUserId  String       @unique
+  referredUser    User         @relation("ReferredUser", fields: [referredUserId], references: [id])
+  status          ReferralStatus @default(PENDING)
+  commissionRate  Float        @default(0.20) // 20%
+  totalEarned     Float        @default(0)
+  commissions     Commission[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+enum ReferralStatus {
+  PENDING    // referred user still in trial
+  ACTIVE     // referred user is paying
+  CANCELLED  // referred user cancelled
+}
+
+// ========================
+// COMMISSION & PAYOUT
+// ========================
+model Commission {
+  id          String   @id @default(cuid())
+  referralId  String
+  referral    Referral @relation(fields: [referralId], references: [id])
+  amount      Float    // commission amount in USD
+  sourceAmount Float   // original payment amount
+  period      String   // e.g. "2024-01"
+  status      CommissionStatus @default(PENDING)
+  payoutId    String?
+  payout      Payout?  @relation(fields: [payoutId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+model Payout {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  amount        Float        // total payout in USD
+  usdtAmount    Float?       // converted USDT amount
+  walletAddress String       // TRC-20 USDT address
+  txHash        String?      // blockchain transaction hash
+  status        PayoutStatus @default(PENDING)
+  commissions   Commission[]
+  processedAt   DateTime?
+  createdAt     DateTime     @default(now())
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ========================
+// AUDIT LOG
+// ========================
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // e.g. "license.verify", "payout.request", "subscription.created"
+  details   String?  @db.Text
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
