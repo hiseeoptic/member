@@ -75,6 +75,13 @@ export default function BillingPage() {
     setLoading(false);
   };
 
+  const openPortal = async () => {
+    const res = await fetch("/api/portal", { method: "POST" });
+    const { url, error } = await res.json();
+    if (url) window.location.href = url;
+    else if (error) alert(error);
+  };
+
   if (!profile) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -135,6 +142,14 @@ export default function BillingPage() {
               {String(sub?.status || "NONE")}
             </div>
           </div>
+          {sub?.paymentMethod === "STRIPE" && sub?.status === "ACTIVE" && (
+            <button
+              onClick={openPortal}
+              className="mt-4 text-indigo-400 hover:text-indigo-300 text-xs font-semibold hover:underline"
+            >
+              Manage Subscription (Stripe Portal) →
+            </button>
+          )}
         </div>
 
         {/* Stripe Payment */}

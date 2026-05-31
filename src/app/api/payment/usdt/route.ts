@@ -64,11 +64,42 @@ export async function POST(req: NextRequest) {
     data: { expiresAt: null },
   });
 
-  // Activate referral if exists
-  await prisma.referral.updateMany({
+  // Activate referral if exists & create commission
+  const pendingReferral = await prisma.referral.findFirst({
     where: { referredUserId: session.user.id, status: "PENDING" },
-    data: { status: "ACTIVE" },
   });
+
+  if (pendingReferral) {
+    await prisma.referral.update({
+      where: { id: pendingReferral.id },
+      data: { status: "ACTIVE" },
+    });
+  }
+
+  // Calculate affiliate commission for any active referral
+  const activeReferral = await prisma.referral.findUnique({
+    where: { referredUserId: session.user.id },
+  });
+
+  if (activeReferral && activeReferral.status === "ACTIVE") {
+    const planPrice = plan === "YEARLY" ? 149.99 : 19.99;
+    const commission = planPrice * activeReferral.commissionRate;
+
+    await prisma.commission.create({
+      data: {
+        referralId: activeReferral.id,
+        amount: commission,
+        sourceAmount: planPrice,
+        period: new Date().toISOString().slice(0, 7),
+        status: "APPROVED",
+      },
+    });
+
+    await prisma.referral.update({
+      where: { id: activeReferral.id },
+      data: { totalEarned: { increment: commission } },
+    });
+  }
 
   await prisma.auditLog.create({
     data: {

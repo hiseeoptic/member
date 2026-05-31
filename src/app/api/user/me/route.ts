@@ -51,7 +51,7 @@ export async function GET() {
     licenseKey: user.licenseKeys[0]?.key || null,
     referralCode: user.referralCode?.code || null,
     referralLink: user.referralCode
-      ? `${process.env.NEXTAUTH_URL || "https://app.nguyenduchoa.com"}/ref/${user.referralCode.code}`
+      ? `${process.env.NEXTAUTH_URL || "https://member.nguyenduchoa.com"}/ref/${user.referralCode.code}`
       : null,
     affiliate: {
       totalReferrals: user.referrals.length,

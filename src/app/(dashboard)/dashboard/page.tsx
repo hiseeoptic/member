@@ -20,6 +20,7 @@ interface UserProfile {
   referralCode: string | null;
   referralLink: string | null;
   usdtWallet: string | null;
+  role: string;
   affiliate: {
     totalReferrals: number;
     activeReferrals: number;
@@ -42,6 +43,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === "unauthenticated") redirect("/login");
     if (status === "authenticated") {
+      // Track referral (from cookie set by /ref/[code])
+      fetch("/api/referral/track", { method: "POST" }).catch(() => {});
+
       fetch("/api/user/me")
         .then((r) => r.json())
         .then(setProfile);
@@ -98,9 +102,17 @@ export default function DashboardPage() {
             <span className="font-black text-white tracking-tight">Auto Flow Pro</span>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/affiliate" className="text-zinc-400 hover:text-white text-xs font-semibold transition-colors">
+              Affiliate
+            </Link>
             <Link href="/billing" className="text-zinc-400 hover:text-white text-xs font-semibold transition-colors">
               Billing
             </Link>
+            {profile.role === "ADMIN" && (
+              <Link href="/admin" className="text-amber-400 hover:text-amber-300 text-xs font-semibold transition-colors">
+                Admin
+              </Link>
+            )}
             <button onClick={() => signOut({ callbackUrl: "/" })} className="text-zinc-500 hover:text-white text-xs font-semibold transition-colors">
               Logout
             </button>
