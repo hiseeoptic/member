@@ -1,8 +1,9 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 interface UserProfile {
   id: string;
@@ -97,7 +98,12 @@ export default function DashboardPage() {
             <span className="font-black text-white tracking-tight">Auto Flow Pro</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-zinc-500 text-sm">{profile.email}</span>
+            <Link href="/billing" className="text-zinc-400 hover:text-white text-xs font-semibold transition-colors">
+              Billing
+            </Link>
+            <button onClick={() => signOut({ callbackUrl: "/" })} className="text-zinc-500 hover:text-white text-xs font-semibold transition-colors">
+              Logout
+            </button>
             {profile.image && (
               <img src={profile.image} alt="" className="w-8 h-8 rounded-full" />
             )}
