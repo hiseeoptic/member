@@ -15,7 +15,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await verifyLicense(licenseKey, deviceId);
+    const ipAddress =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      req.headers.get("x-real-ip") ||
+      undefined;
+
+    const result = await verifyLicense(licenseKey, deviceId, ipAddress);
 
     // Audit log
     await prisma.auditLog.create({

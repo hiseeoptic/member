@@ -243,6 +243,22 @@ enum PaymentStatus {
 }
 
 // ========================
+// TRIAL ABUSE PREVENTION
+// One device may consume only ONE free trial. First user to verify a
+// trial license from a device claims it; other accounts trying a trial
+// from the same device are blocked.
+// ========================
+model TrialClaim {
+  deviceId   String   @id // device fingerprint sent by the extension
+  userId     String // the user who first used a trial on this device
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ========================
 // AUDIT LOG
 // ========================
 model AuditLog {

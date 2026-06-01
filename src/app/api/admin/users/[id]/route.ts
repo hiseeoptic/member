@@ -103,6 +103,8 @@ export async function POST(
         where: { userId },
         data: { deviceId: null },
       });
+      // Also release any trial-device claims so the user can start fresh.
+      await prisma.trialClaim.deleteMany({ where: { userId } });
       break;
     }
 
