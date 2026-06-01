@@ -51,12 +51,27 @@ interface PayoutRow {
   createdAt: string;
 }
 
+interface PaymentRow {
+  id: string;
+  userName: string;
+  userEmail: string;
+  plan: string;
+  amount: number;
+  method: string;
+  txHash: string;
+  status: string;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
 export default function AdminPage() {
   const { status } = useSession();
-  const [tab, setTab] = useState<"overview" | "users" | "payouts">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "payments" | "payouts">("overview");
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [search, setSearch] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
   const [txHashInput, setTxHashInput] = useState<Record<string, string>>({});
@@ -68,6 +83,7 @@ export default function AdminPage() {
       loadStats();
       loadUsers();
       loadPayouts();
+      loadPayments();
     }
   }, [status]);
 
@@ -88,6 +104,27 @@ export default function AdminPage() {
       .then((r) => r.json())
       .then((d) => setPayouts(d.payouts || []))
       .catch(() => {});
+
+  const loadPayments = () =>
+    fetch("/api/admin/payments")
+      .then((r) => r.json())
+      .then((d) => setPayments(d.payments || []))
+      .catch(() => {});
+
+  const handlePaymentReview = async (paymentId: string, action: string) => {
+    if (action === "approve" && !confirm("Xác nhận đã kiểm tra giao dịch trên TronScan và DUYỆT?")) return;
+    if (action === "reject" && !confirm("Từ chối thanh toán này?")) return;
+    setProcessing(paymentId);
+    await fetch("/api/admin/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentId, action }),
+    });
+    setProcessing(null);
+    loadPayments();
+    loadStats();
+    loadUsers(search);
+  };
 
   const handlePayout = async (payoutId: string, action: string) => {
     setProcessing(payoutId);
@@ -146,6 +183,8 @@ export default function AdminPage() {
       PROCESSING: "text-blue-400 bg-blue-500/10",
       COMPLETED: "text-green-400 bg-green-500/10",
       FAILED: "text-red-400 bg-red-500/10",
+      APPROVED: "text-green-400 bg-green-500/10",
+      REJECTED: "text-red-400 bg-red-500/10",
     };
     return (
       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${colors[s] || "text-zinc-400 bg-zinc-500/10"}`}>
@@ -166,7 +205,7 @@ export default function AdminPage() {
             <span className="text-white font-black">Admin Panel</span>
           </div>
           <div className="flex gap-1 bg-zinc-900 rounded-xl p-1">
-            {(["overview", "users", "payouts"] as const).map((t) => (
+            {(["overview", "users", "payments", "payouts"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -313,6 +352,91 @@ export default function AdminPage() {
               </div>
               {users.length === 0 && (
                 <div className="p-8 text-center text-zinc-500 text-sm">No users found.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== PAYMENTS (USDT upgrade review) ===== */}
+        {tab === "payments" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-bold">USDT Upgrade Payments</h2>
+              <button
+                onClick={loadPayments}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+              >
+                Refresh
+              </button>
+            </div>
+            <p className="text-zinc-500 text-xs">
+              Kiểm tra TxHash trên TronScan (đúng ví nhận, đúng số tiền, đã xác nhận) rồi bấm Duyệt để kích hoạt Pro.
+            </p>
+
+            <div className="space-y-3">
+              {payments.map((p) => (
+                <div key={p.id} className="bg-zinc-900/50 border border-white/10 rounded-2xl p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-white font-bold">{p.userName || p.userEmail}</div>
+                      <div className="text-zinc-500 text-xs">{p.userEmail}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-emerald-400 font-black text-xl">${p.amount.toFixed(2)}</div>
+                      <div className="flex items-center gap-2 justify-end">
+                        <span className="text-zinc-500 text-[11px]">{p.plan} · {p.method}</span>
+                        {statusBadge(p.status)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-3">
+                    <div>
+                      <span className="text-zinc-500">Submitted:</span>
+                      <div className="text-zinc-300">{new Date(p.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500">TxHash:</span>
+                      <div className="text-zinc-300 font-mono text-[11px] truncate">
+                        <a
+                          href={`https://tronscan.org/#/transaction/${p.txHash}`}
+                          target="_blank"
+                          className="text-indigo-400 hover:underline"
+                        >
+                          {p.txHash}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {p.status === "PENDING" ? (
+                    <div className="flex items-center gap-2 pt-3 border-t border-white/5">
+                      <button
+                        onClick={() => handlePaymentReview(p.id, "approve")}
+                        disabled={processing === p.id}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                      >
+                        ✓ Duyệt & Kích hoạt
+                      </button>
+                      <button
+                        onClick={() => handlePaymentReview(p.id, "reject")}
+                        disabled={processing === p.id}
+                        className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pt-3 border-t border-white/5 text-zinc-500 text-xs">
+                      {p.reviewedAt ? `Reviewed: ${new Date(p.reviewedAt).toLocaleString()}` : ""}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {payments.length === 0 && (
+                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 text-center text-zinc-500 text-sm">
+                  No USDT payments yet.
+                </div>
               )}
             </div>
           </div>

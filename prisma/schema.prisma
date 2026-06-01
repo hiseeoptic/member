@@ -67,6 +67,7 @@ model User {
   referredBy    Referral?      @relation("ReferredUser")
   referrals     Referral[]     @relation("ReferrerUser")
   payouts       Payout[]
+  payments      Payment[]
   usdtWallet    String?        // TRC-20 USDT wallet address
 }
 
@@ -212,6 +213,33 @@ enum PayoutStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+// ========================
+// PAYMENT (USDT manual review)
+// ========================
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan        PlanType
+  amount      Float         // expected amount in USD/USDT
+  method      PaymentMethod @default(USDT)
+  txHash      String        // blockchain transaction hash submitted by user
+  status      PaymentStatus @default(PENDING)
+  reviewedBy  String?       // admin user id who approved/rejected
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+  @@index([userId])
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 // ========================

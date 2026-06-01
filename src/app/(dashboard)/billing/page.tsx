@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-const USDT_WALLET = "TXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; // Your receiving wallet
+// Receiving wallet — set NEXT_PUBLIC_USDT_WALLET in Vercel env vars
+const USDT_WALLET =
+  process.env.NEXT_PUBLIC_USDT_WALLET || "TXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 const PLANS_USDT: Record<string, { label: string; price: number }> = {
   MONTHLY: { label: "Pro Monthly", price: 19.99 },
   YEARLY: { label: "Pro Yearly", price: 149.99 },
@@ -19,6 +21,7 @@ export default function BillingPage() {
   const [usdtPlan, setUsdtPlan] = useState("MONTHLY");
   const [txHash, setTxHash] = useState("");
   const [usdtSubmitted, setUsdtSubmitted] = useState(false);
+  const [usdtError, setUsdtError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -60,19 +63,28 @@ export default function BillingPage() {
   const handleUsdtPayment = async () => {
     if (!txHash.trim()) return;
     setLoading(true);
-    const res = await fetch("/api/payment/usdt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plan: usdtPlan,
-        txHash: txHash.trim(),
-        amount: PLANS_USDT[usdtPlan].price,
-      }),
-    });
-    if (res.ok) {
-      setUsdtSubmitted(true);
+    setUsdtError(null);
+    try {
+      const res = await fetch("/api/payment/usdt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: usdtPlan,
+          txHash: txHash.trim(),
+          amount: PLANS_USDT[usdtPlan].price,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setUsdtSubmitted(true);
+      } else {
+        setUsdtError(data.error || `Lỗi (HTTP ${res.status})`);
+      }
+    } catch {
+      setUsdtError("Không thể kết nối server. Thử lại sau.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const openPortal = async () => {
@@ -188,9 +200,11 @@ export default function BillingPage() {
 
           {usdtSubmitted ? (
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
-              <div className="text-green-400 font-bold text-lg mb-1">✅ Payment Submitted!</div>
+              <div className="text-green-400 font-bold text-lg mb-1">✅ Đã gửi thanh toán!</div>
               <p className="text-zinc-400 text-sm">
-                Your subscription has been activated. Refresh the page to see updated status.
+                Giao dịch của bạn đang chờ admin xác minh trên blockchain. Tài khoản Pro sẽ
+                được kích hoạt sau khi duyệt (thường trong vài giờ). Bạn sẽ thấy trạng thái
+                cập nhật tại đây.
               </p>
             </div>
           ) : (
@@ -250,6 +264,9 @@ export default function BillingPage() {
                       {loading ? "..." : "Submit"}
                     </button>
                   </div>
+                  {usdtError && (
+                    <p className="text-red-400 text-xs mt-2">{usdtError}</p>
+                  )}
                 </div>
               </div>
             </>
