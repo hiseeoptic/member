@@ -22,7 +22,26 @@ export default function BillingPage() {
   const [txHash, setTxHash] = useState("");
   const [usdtSubmitted, setUsdtSubmitted] = useState(false);
   const [usdtError, setUsdtError] = useState<string | null>(null);
+  const [walletCopied, setWalletCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const copyWallet = async () => {
+    try {
+      await navigator.clipboard.writeText(USDT_WALLET);
+    } catch {
+      // Fallback for insecure contexts / older browsers
+      const ta = document.createElement("textarea");
+      ta.value = USDT_WALLET;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setWalletCopied(true);
+    setTimeout(() => setWalletCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") redirect("/login");
@@ -235,8 +254,21 @@ export default function BillingPage() {
                   <label className="text-zinc-400 text-xs font-bold block mb-2">
                     2. Send ${PLANS_USDT[usdtPlan].price} USDT (TRC-20) to:
                   </label>
-                  <div className="bg-zinc-800 border border-white/5 rounded-xl p-3 font-mono text-sm text-emerald-400 break-all select-all">
-                    {USDT_WALLET}
+                  <div className="flex gap-2 items-stretch">
+                    <div className="flex-1 bg-zinc-800 border border-white/5 rounded-xl p-3 font-mono text-sm text-emerald-400 break-all select-all">
+                      {USDT_WALLET}
+                    </div>
+                    <button
+                      onClick={copyWallet}
+                      className={`shrink-0 px-4 rounded-xl text-sm font-bold border transition-colors ${
+                        walletCopied
+                          ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
+                          : "border-white/10 bg-zinc-800 text-zinc-300 hover:border-emerald-500/40 hover:text-emerald-400"
+                      }`}
+                      title="Copy địa chỉ ví"
+                    >
+                      {walletCopied ? "✅ Đã copy" : "📋 Copy"}
+                    </button>
                   </div>
                   <p className="text-zinc-600 text-[11px] mt-1">
                     Network: TRON (TRC-20) only. Do NOT send on other networks.
