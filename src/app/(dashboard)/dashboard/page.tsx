@@ -38,6 +38,7 @@ interface UserProfile {
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,10 +48,32 @@ export default function DashboardPage() {
       fetch("/api/referral/track", { method: "POST" }).catch(() => {});
 
       fetch("/api/user/me")
-        .then((r) => r.json())
-        .then(setProfile);
+        .then(async (r) => {
+          if (!r.ok) {
+            const body = await r.json().catch(() => ({}));
+            throw new Error(body.detail || body.error || `HTTP ${r.status}`);
+          }
+          return r.json();
+        })
+        .then(setProfile)
+        .catch((e) => setError(e.message || "Failed to load profile"));
     }
   }, [status]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <div className="text-red-400 font-medium">Không tải được hồ sơ</div>
+        <div className="text-zinc-500 text-sm max-w-md break-words">{error}</div>
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700"
+        >
+          Đăng xuất & thử lại
+        </button>
+      </div>
+    );
+  }
 
   if (!profile) {
     return (
