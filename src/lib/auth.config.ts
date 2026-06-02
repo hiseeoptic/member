@@ -1,6 +1,17 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import Resend from "next-auth/providers/resend";
 import { isAdminEmail } from "@/lib/admins";
+
+// Magic-link email login — only enabled once AUTH_RESEND_KEY is configured.
+const emailProviders = process.env.AUTH_RESEND_KEY
+  ? [
+      Resend({
+        apiKey: process.env.AUTH_RESEND_KEY,
+        from: process.env.AUTH_EMAIL_FROM || "Auto Flow Pro <noreply@nguyenduchoa.com>",
+      }),
+    ]
+  : [];
 
 // Edge-safe auth config (NO Prisma, NO adapter) — shared by middleware & full auth
 export const authConfig = {
@@ -11,6 +22,7 @@ export const authConfig = {
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
+    ...emailProviders,
   ],
   pages: {
     signIn: "/login",

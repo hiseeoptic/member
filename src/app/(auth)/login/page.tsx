@@ -2,11 +2,31 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
+
+const EMAIL_LOGIN = process.env.NEXT_PUBLIC_EMAIL_LOGIN === "1";
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const ref = searchParams.get("ref");
+  const [email, setEmail] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const sendMagicLink = async () => {
+    if (!email.trim() || sending) return;
+    setSending(true);
+    try {
+      await signIn("resend", {
+        email: email.trim(),
+        callbackUrl: "/dashboard",
+        redirect: false,
+      });
+      setEmailSent(true);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
@@ -75,6 +95,51 @@ function LoginContent() {
             </svg>
             Continue with Google
           </button>
+
+          {EMAIL_LOGIN && (
+            <div className="mt-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider">
+                  hoặc / or
+                </span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+
+              {emailSent ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center">
+                  <div className="text-emerald-400 font-bold text-sm mb-1">
+                    ✉️ Đã gửi link đăng nhập!
+                  </div>
+                  <p className="text-zinc-400 text-xs">
+                    Kiểm tra hộp thư <span className="text-white font-semibold">{email}</span> và
+                    bấm vào liên kết để đăng nhập. (Kiểm tra cả mục Spam.)
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendMagicLink()}
+                    placeholder="ban@email.com"
+                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white focus:border-indigo-500/40 focus:outline-none"
+                  />
+                  <button
+                    onClick={sendMagicLink}
+                    disabled={!email.trim() || sending}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 px-6 rounded-2xl transition-colors disabled:opacity-50"
+                  >
+                    {sending ? "Đang gửi..." : "Gửi link đăng nhập qua email"}
+                  </button>
+                  <p className="text-zinc-600 text-[11px] text-center">
+                    Không cần mật khẩu — chúng tôi gửi 1 liên kết đăng nhập tới email của bạn.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <p className="text-zinc-600 text-[11px] text-center mt-6">
             By continuing, you agree to our Terms of Service and Privacy Policy
