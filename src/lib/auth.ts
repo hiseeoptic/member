@@ -3,11 +3,20 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import { v4 as uuidv4 } from "uuid";
 import { authConfig } from "@/lib/auth.config";
+import { isAdminEmail } from "@/lib/admins";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
   events: {
+    // Runs on every sign-in (new & existing users) — keeps admin role in sync in the DB
+    async signIn({ user }) {
+      if (user?.id && isAdminEmail(user.email)) {
+        await prisma.user
+          .update({ where: { id: user.id }, data: { role: "ADMIN" } })
+          .catch((err) => console.error("admin role sync failed:", err));
+      }
+    },
     async createUser({ user }) {
       if (!user.id) return;
 

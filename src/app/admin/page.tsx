@@ -35,6 +35,12 @@ interface UserRow {
   referralClicks: number;
   totalReferrals: number;
   referralEarnings: number;
+  referredBy: {
+    name: string | null;
+    email: string | null;
+    code: string | null;
+    status: string;
+  } | null;
 }
 
 interface PayoutRow {
@@ -273,6 +279,7 @@ export default function AdminPage() {
                       <th className="p-4 font-bold">Plan</th>
                       <th className="p-4 font-bold">Payment</th>
                       <th className="p-4 font-bold">License</th>
+                      <th className="p-4 font-bold">Referred By</th>
                       <th className="p-4 font-bold">Referrals</th>
                       <th className="p-4 font-bold">Earned</th>
                       <th className="p-4 font-bold">Joined</th>
@@ -283,8 +290,20 @@ export default function AdminPage() {
                     {users.map((u) => (
                       <tr key={u.id} className="hover:bg-white/[0.02]">
                         <td className="p-4">
-                          <div className="text-white font-semibold text-sm">{u.name || "—"}</div>
+                          <div className="text-white font-semibold text-sm flex items-center gap-1.5">
+                            {u.name || "—"}
+                            {u.role === "ADMIN" && (
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-black">
+                                ADMIN
+                              </span>
+                            )}
+                          </div>
                           <div className="text-zinc-500 text-xs">{u.email}</div>
+                          {u.referralCode && (
+                            <div className="text-teal-400/70 text-[10px] font-mono mt-0.5">
+                              ref: {u.referralCode}
+                            </div>
+                          )}
                         </td>
                         <td className="p-4">
                           {u.subscription ? statusBadge(u.subscription.status) : statusBadge("NONE")}
@@ -299,6 +318,20 @@ export default function AdminPage() {
                           <code className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
                             {u.licenseKey ? `${u.licenseKey.slice(0, 12)}...` : "—"}
                           </code>
+                        </td>
+                        <td className="p-4">
+                          {u.referredBy ? (
+                            <div>
+                              <div className="text-zinc-300 text-xs">
+                                {u.referredBy.name || u.referredBy.email || "—"}
+                              </div>
+                              <div className="text-teal-400/70 text-[10px] font-mono">
+                                {u.referredBy.code}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-600 text-xs">—</span>
+                          )}
                         </td>
                         <td className="p-4 text-zinc-300 text-sm font-bold">
                           {u.totalReferrals}

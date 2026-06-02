@@ -63,6 +63,14 @@ export async function GET(req: NextRequest) {
         referrals: {
           select: { id: true, status: true, totalEarned: true },
         },
+        // Who referred THIS user (their upline affiliate)
+        referredBy: {
+          select: {
+            status: true,
+            referralCode: { select: { code: true } },
+            referrer: { select: { name: true, email: true } },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
@@ -102,6 +110,14 @@ export async function GET(req: NextRequest) {
       referralClicks: u.referralCode?.clicks || 0,
       totalReferrals: u.referrals.length,
       referralEarnings: u.referrals.reduce((s, r) => s + r.totalEarned, 0),
+      referredBy: u.referredBy
+        ? {
+            name: u.referredBy.referrer?.name || null,
+            email: u.referredBy.referrer?.email || null,
+            code: u.referredBy.referralCode?.code || null,
+            status: u.referredBy.status,
+          }
+        : null,
     })),
     total,
     page,

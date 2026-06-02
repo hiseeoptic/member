@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import { isAdminEmail } from "@/lib/admins";
 
 // Edge-safe auth config (NO Prisma, NO adapter) — shared by middleware & full auth
 export const authConfig = {
@@ -23,6 +24,10 @@ export const authConfig = {
         token.id = user.id;
         // @ts-expect-error - role is added by Prisma
         token.role = user.role || "USER";
+      }
+      // Designated admin emails are always ADMIN (works even before DB sync)
+      if (isAdminEmail(token.email as string | undefined)) {
+        token.role = "ADMIN";
       }
       return token;
     },

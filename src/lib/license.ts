@@ -26,6 +26,16 @@ export async function verifyLicense(
     return { valid: false, status: "NOT_FOUND", message: "License key not found" };
   }
 
+  // Admin accounts: unlimited access, never blocked or expired.
+  if (license.user.role === "ADMIN") {
+    return {
+      valid: true,
+      status: "ADMIN",
+      plan: "ADMIN",
+      message: "Admin — unlimited access",
+    };
+  }
+
   if (license.status === "REVOKED") {
     return { valid: false, status: "REVOKED", message: "License has been revoked" };
   }
