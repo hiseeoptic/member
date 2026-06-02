@@ -259,6 +259,20 @@ model TrialClaim {
 }
 
 // ========================
+// DEMO USAGE (try before signup)
+// Lets a visitor run a few free generations WITHOUT an account,
+// tracked by the extension's deviceId. After the quota is used up
+// they are prompted to sign in for the full 15-day trial.
+// ========================
+model DemoUsage {
+  deviceId  String   @id // device fingerprint sent by the extension
+  used      Int      @default(0) // generations consumed so far
+  ipAddress String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================
 // AUDIT LOG
 // ========================
 model AuditLog {
