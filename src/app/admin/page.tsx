@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -103,6 +103,7 @@ export default function AdminPage() {
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [search, setSearch] = useState("");
+  const [accessError, setAccessError] = useState<"forbidden" | "error" | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [txHashInput, setTxHashInput] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -126,9 +127,17 @@ export default function AdminPage() {
 
   const loadStats = () =>
     fetch("/api/admin/stats")
-      .then((r) => r.json())
-      .then(setStats)
-      .catch(() => {});
+      .then(async (r) => {
+        if (!r.ok) {
+          setAccessError(r.status === 403 ? "forbidden" : "error");
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => d && setStats(d))
+      .catch(() => setAccessError("error"));
+
+  const money = (n?: number) => `$${(n ?? 0).toFixed(2)}`;
 
   const loadUsers = (q = "") =>
     fetch(`/api/admin/users?search=${encodeURIComponent(q)}`)
@@ -228,6 +237,35 @@ export default function AdminPage() {
     URL.revokeObjectURL(url);
   };
 
+  if (accessError) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+        <div className="max-w-md text-center bg-zinc-900/60 border border-white/10 rounded-2xl p-8">
+          <div className="text-4xl mb-3">{accessError === "forbidden" ? "🔒" : "⚠️"}</div>
+          <h1 className="text-white font-bold text-lg mb-2">
+            {accessError === "forbidden" ? "Bạn chưa có quyền Admin" : "Không tải được dữ liệu"}
+          </h1>
+          <p className="text-zinc-400 text-sm mb-5">
+            {accessError === "forbidden"
+              ? "Tài khoản đang đăng nhập không phải admin. Hãy đăng xuất rồi đăng nhập lại bằng duchoa.klink@gmail.com (hoặc duchoa.swh21@gmail.com)."
+              : "Có lỗi khi tải dữ liệu admin. Thử tải lại trang."}
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold"
+            >
+              Đăng xuất & đăng nhập lại
+            </button>
+            <Link href="/dashboard" className="px-5 py-2.5 bg-zinc-800 text-zinc-200 rounded-xl text-sm font-bold">
+              Về Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!stats) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -293,10 +331,10 @@ export default function AdminPage() {
               <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">💰 Báo cáo tài chính</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: "Doanh thu (đã duyệt)", value: `$${stats.grossRevenue.toFixed(2)}`, color: "text-emerald-400", big: true },
-                  { label: "Lợi nhuận ròng", value: `$${stats.netRevenue.toFixed(2)}`, color: "text-green-400", big: true },
-                  { label: "Hoa hồng còn nợ", value: `$${stats.commissionsOwed.toFixed(2)}`, color: "text-amber-400" },
-                  { label: "Đã trả affiliate", value: `$${stats.totalPaidOut.toFixed(2)}`, color: "text-teal-400" },
+                  { label: "Doanh thu (đã duyệt)", value: money(stats.grossRevenue), color: "text-emerald-400", big: true },
+                  { label: "Lợi nhuận ròng", value: money(stats.netRevenue), color: "text-green-400", big: true },
+                  { label: "Hoa hồng còn nợ", value: money(stats.commissionsOwed), color: "text-amber-400" },
+                  { label: "Đã trả affiliate", value: money(stats.totalPaidOut), color: "text-teal-400" },
                 ].map((s) => (
                   <div key={s.label} className={`bg-zinc-900/50 border rounded-2xl p-5 text-center ${s.big ? "border-emerald-500/20" : "border-white/5"}`}>
                     <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
