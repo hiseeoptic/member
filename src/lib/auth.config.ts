@@ -21,6 +21,10 @@ export const authConfig = {
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // Always show the Google account chooser so users can pick a
+      // different Gmail instead of being auto-logged into whichever
+      // account the browser already has signed in.
+      authorization: { params: { prompt: "select_account" } },
     }),
     ...emailProviders,
   ],
