@@ -10,11 +10,33 @@ interface Stats {
   activeSubscriptions: number;
   trialUsers: number;
   expiredUsers: number;
-  totalReferrals: number;
-  pendingPayouts: number;
-  totalPaidOut: number;
-  estimatedRevenue: number;
   recentSignups: number;
+  totalReferrals: number;
+  activeReferrals: number;
+  pendingPayouts: number;
+  // Financials
+  grossRevenue: number;
+  paidCustomers: number;
+  pendingPayments: number;
+  commissionsOwed: number;
+  commissionsPaid: number;
+  totalPaidOut: number;
+  netRevenue: number;
+}
+
+interface AffiliateRow {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  code: string;
+  clicks: number;
+  wallet: string | null;
+  totalReferrals: number;
+  activeReferrals: number;
+  totalEarned: number;
+  pendingPayout: number;
+  paidOut: number;
+  downline: Array<{ user: string; status: string; earned: number; joinedAt: string }>;
 }
 
 interface UserRow {
@@ -73,9 +95,11 @@ interface PaymentRow {
 
 export default function AdminPage() {
   const { status } = useSession();
-  const [tab, setTab] = useState<"overview" | "users" | "payments" | "payouts">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "affiliates" | "payments" | "payouts">("overview");
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [affiliates, setAffiliates] = useState<AffiliateRow[]>([]);
+  const [expandedAff, setExpandedAff] = useState<string | null>(null);
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [search, setSearch] = useState("");
@@ -88,10 +112,17 @@ export default function AdminPage() {
     if (status === "authenticated") {
       loadStats();
       loadUsers();
+      loadAffiliates();
       loadPayouts();
       loadPayments();
     }
   }, [status]);
+
+  const loadAffiliates = () =>
+    fetch("/api/admin/affiliates")
+      .then((r) => r.json())
+      .then((d) => setAffiliates(d.affiliates || []))
+      .catch(() => {});
 
   const loadStats = () =>
     fetch("/api/admin/stats")
@@ -170,6 +201,33 @@ export default function AdminPage() {
     loadUsers(search);
   };
 
+  const exportUsersCsv = () => {
+    const head = ["Name", "Email", "Role", "Status", "Plan", "Payment", "License", "ReferredBy", "Referrals", "Earned", "Joined"];
+    const rows = users.map((u) => [
+      u.name || "",
+      u.email || "",
+      u.role,
+      u.subscription?.status || "NONE",
+      u.subscription?.plan || "",
+      u.subscription?.paymentMethod || "",
+      u.licenseKey || "",
+      u.referredBy ? `${u.referredBy.email || u.referredBy.name || ""} (${u.referredBy.code || ""})` : "",
+      String(u.totalReferrals),
+      u.referralEarnings.toFixed(2),
+      new Date(u.createdAt).toLocaleDateString(),
+    ]);
+    const csv = [head, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `autoflow-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!stats) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -211,7 +269,7 @@ export default function AdminPage() {
             <span className="text-white font-black">Admin Panel</span>
           </div>
           <div className="flex gap-1 bg-zinc-900 rounded-xl p-1">
-            {(["overview", "users", "payments", "payouts"] as const).map((t) => (
+            {(["overview", "users", "affiliates", "payments", "payouts"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -229,23 +287,45 @@ export default function AdminPage() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         {/* ===== OVERVIEW ===== */}
         {tab === "overview" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Total Users", value: stats.totalUsers, color: "text-indigo-400" },
-                { label: "Active Subs", value: stats.activeSubscriptions, color: "text-green-400" },
-                { label: "Trials", value: stats.trialUsers, color: "text-amber-400" },
-                { label: "Expired/Cancel", value: stats.expiredUsers, color: "text-zinc-400" },
-                { label: "Total Referrals", value: stats.totalReferrals, color: "text-teal-400" },
-                { label: "Pending Payouts", value: stats.pendingPayouts, color: "text-orange-400" },
-                { label: "Total Paid Out", value: `$${stats.totalPaidOut.toFixed(2)}`, color: "text-emerald-400" },
-                { label: "New (7 days)", value: stats.recentSignups, color: "text-purple-400" },
-              ].map((s) => (
-                <div key={s.label} className="bg-zinc-900/50 border border-white/5 rounded-2xl p-5 text-center">
-                  <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
-                  <div className="text-zinc-500 text-[11px] font-bold uppercase mt-1">{s.label}</div>
-                </div>
-              ))}
+          <div className="space-y-8">
+            {/* Financial report */}
+            <div>
+              <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">💰 Báo cáo tài chính</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: "Doanh thu (đã duyệt)", value: `$${stats.grossRevenue.toFixed(2)}`, color: "text-emerald-400", big: true },
+                  { label: "Lợi nhuận ròng", value: `$${stats.netRevenue.toFixed(2)}`, color: "text-green-400", big: true },
+                  { label: "Hoa hồng còn nợ", value: `$${stats.commissionsOwed.toFixed(2)}`, color: "text-amber-400" },
+                  { label: "Đã trả affiliate", value: `$${stats.totalPaidOut.toFixed(2)}`, color: "text-teal-400" },
+                ].map((s) => (
+                  <div key={s.label} className={`bg-zinc-900/50 border rounded-2xl p-5 text-center ${s.big ? "border-emerald-500/20" : "border-white/5"}`}>
+                    <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+                    <div className="text-zinc-500 text-[11px] font-bold uppercase mt-1">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Users & affiliate counts */}
+            <div>
+              <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">👥 Người dùng & Affiliate</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: "Tổng đăng ký", value: stats.totalUsers, color: "text-indigo-400" },
+                  { label: "Khách trả phí", value: stats.paidCustomers, color: "text-green-400" },
+                  { label: "Đang dùng thử", value: stats.trialUsers, color: "text-amber-400" },
+                  { label: "Mới (7 ngày)", value: stats.recentSignups, color: "text-purple-400" },
+                  { label: "Đang active", value: stats.activeSubscriptions, color: "text-green-400" },
+                  { label: "Tổng giới thiệu", value: stats.totalReferrals, color: "text-teal-400" },
+                  { label: "Giới thiệu active", value: stats.activeReferrals, color: "text-emerald-400" },
+                  { label: "Chờ duyệt (TT + rút)", value: stats.pendingPayments + stats.pendingPayouts, color: "text-orange-400" },
+                ].map((s) => (
+                  <div key={s.label} className="bg-zinc-900/50 border border-white/5 rounded-2xl p-5 text-center">
+                    <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+                    <div className="text-zinc-500 text-[11px] font-bold uppercase mt-1">{s.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -266,6 +346,14 @@ export default function AdminPage() {
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors"
               >
                 Search
+              </button>
+              <button
+                type="button"
+                onClick={exportUsersCsv}
+                className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-sm font-bold transition-colors border border-white/10"
+                title="Xuất danh sách ra file CSV (mở bằng Excel)"
+              >
+                ⬇ CSV
               </button>
             </form>
 
@@ -385,6 +473,100 @@ export default function AdminPage() {
               </div>
               {users.length === 0 && (
                 <div className="p-8 text-center text-zinc-500 text-sm">No users found.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== AFFILIATES (leaderboard + downline tree) ===== */}
+        {tab === "affiliates" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-white font-bold">Affiliate ({affiliates.length})</h2>
+                <p className="text-zinc-500 text-xs mt-1">
+                  Bấm vào một affiliate để xem danh sách người họ giới thiệu (downline).
+                </p>
+              </div>
+              <button onClick={loadAffiliates} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                Refresh
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {affiliates.map((a) => (
+                <div key={a.userId} className="bg-zinc-900/50 border border-white/10 rounded-2xl overflow-hidden">
+                  <button
+                    onClick={() => setExpandedAff(expandedAff === a.userId ? null : a.userId)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-white/[0.02] text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-zinc-500 text-xs">{expandedAff === a.userId ? "▼" : "▶"}</span>
+                      <div className="min-w-0">
+                        <div className="text-white font-semibold text-sm truncate">{a.name || a.email}</div>
+                        <div className="text-zinc-500 text-xs truncate">
+                          <code className="text-teal-400">{a.code}</code> · {a.clicks} clicks · {a.email}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-5 shrink-0 text-right">
+                      <div>
+                        <div className="text-white font-bold text-sm">{a.totalReferrals}</div>
+                        <div className="text-zinc-600 text-[10px] uppercase">Giới thiệu</div>
+                      </div>
+                      <div>
+                        <div className="text-green-400 font-bold text-sm">{a.activeReferrals}</div>
+                        <div className="text-zinc-600 text-[10px] uppercase">Active</div>
+                      </div>
+                      <div>
+                        <div className="text-emerald-400 font-bold text-sm">${a.totalEarned.toFixed(2)}</div>
+                        <div className="text-zinc-600 text-[10px] uppercase">Đã kiếm</div>
+                      </div>
+                      <div>
+                        <div className="text-amber-400 font-bold text-sm">${a.pendingPayout.toFixed(2)}</div>
+                        <div className="text-zinc-600 text-[10px] uppercase">Chờ rút</div>
+                      </div>
+                    </div>
+                  </button>
+
+                  {expandedAff === a.userId && (
+                    <div className="border-t border-white/5 p-4 bg-zinc-950/40">
+                      <div className="text-zinc-500 text-[11px] mb-2">
+                        Ví USDT: {a.wallet ? <code className="text-zinc-300">{a.wallet}</code> : <span className="text-zinc-600">chưa đặt</span>}
+                        {" · "}Đã trả: <span className="text-teal-400">${a.paidOut.toFixed(2)}</span>
+                      </div>
+                      {a.downline.length === 0 ? (
+                        <div className="text-zinc-600 text-sm py-2">Chưa có ai.</div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-zinc-500 text-left text-xs border-b border-white/5">
+                              <th className="py-2 font-bold">Người được giới thiệu</th>
+                              <th className="py-2 font-bold">Trạng thái</th>
+                              <th className="py-2 font-bold">Hoa hồng</th>
+                              <th className="py-2 font-bold">Ngày tham gia</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {a.downline.map((d, i) => (
+                              <tr key={i}>
+                                <td className="py-2 text-zinc-300">{d.user}</td>
+                                <td className="py-2">{statusBadge(d.status)}</td>
+                                <td className="py-2 text-emerald-400 font-bold">${d.earned.toFixed(2)}</td>
+                                <td className="py-2 text-zinc-500 text-xs">{new Date(d.joinedAt).toLocaleDateString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {affiliates.length === 0 && (
+                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 text-center text-zinc-500 text-sm">
+                  Chưa có affiliate nào (chưa ai giới thiệu được người dùng).
+                </div>
               )}
             </div>
           </div>
