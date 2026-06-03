@@ -1,10 +1,7 @@
 import LoginForm from "./LoginForm";
 
-// Server component: reads the server-side env at request time (no build-time
-// inlining gotcha). The email magic-link form shows whenever Resend is configured.
-export const dynamic = "force-dynamic";
-
+// Website login is Google-only (verified). The simple "enter email" flow lives
+// in the Chrome extension as a trial activation, not as a website login.
 export default function LoginPage() {
-  const emailEnabled = !!process.env.AUTH_RESEND_KEY;
-  return <LoginForm emailEnabled={emailEnabled} />;
+  return <LoginForm emailEnabled={false} />;
 }

@@ -1,17 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import Resend from "next-auth/providers/resend";
 import { isAdminEmail } from "@/lib/admins";
-
-// Magic-link email login — only enabled once AUTH_RESEND_KEY is configured.
-const emailProviders = process.env.AUTH_RESEND_KEY
-  ? [
-      Resend({
-        apiKey: process.env.AUTH_RESEND_KEY,
-        from: process.env.AUTH_EMAIL_FROM || "Auto Flow Pro <noreply@nguyenduchoa.com>",
-      }),
-    ]
-  : [];
 
 // Edge-safe auth config (NO Prisma, NO adapter) — shared by middleware & full auth
 export const authConfig = {
@@ -25,8 +14,12 @@ export const authConfig = {
       // different Gmail instead of being auto-logged into whichever
       // account the browser already has signed in.
       authorization: { params: { prompt: "select_account" } },
+      // A user may first claim an email-trial in the extension (User row with
+      // no linked Account), then later sign in with Google using the same
+      // email. Google verifies email ownership, so linking is safe and lets
+      // them upgrade seamlessly instead of hitting OAuthAccountNotLinked.
+      allowDangerousEmailAccountLinking: true,
     }),
-    ...emailProviders,
   ],
   pages: {
     signIn: "/login",
