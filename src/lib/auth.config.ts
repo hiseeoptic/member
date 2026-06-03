@@ -14,11 +14,6 @@ export const authConfig = {
       // different Gmail instead of being auto-logged into whichever
       // account the browser already has signed in.
       authorization: { params: { prompt: "select_account" } },
-      // A user may first claim an email-trial in the extension (User row with
-      // no linked Account), then later sign in with Google using the same
-      // email. Google verifies email ownership, so linking is safe and lets
-      // them upgrade seamlessly instead of hitting OAuthAccountNotLinked.
-      allowDangerousEmailAccountLinking: true,
     }),
   ],
   pages: {

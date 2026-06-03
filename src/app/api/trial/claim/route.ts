@@ -41,9 +41,12 @@ export async function POST(req: NextRequest) {
       req.headers.get("x-real-ip") ||
       null;
 
-    // ---- 1. Email already known? ----
+    // ---- 1. Trial email already known? ----
+    // NB: we key trials on `trialEmail`, NOT `email`. `email` is reserved for
+    // verified Google logins, so an unverified trial email can never collide
+    // with (or hijack) a real account.
     const existing = await prisma.user.findUnique({
-      where: { email },
+      where: { trialEmail: email },
       include: { subscription: true, licenseKeys: { take: 1, orderBy: { createdAt: "desc" } } },
     });
 
@@ -119,7 +122,7 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.create({
       data: {
-        email,
+        trialEmail: email,
         subscription: {
           create: {
             status: "TRIAL",

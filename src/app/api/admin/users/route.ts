@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
+        trialEmail: true,
         image: true,
         role: true,
         createdAt: true,
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
     users: filtered.map((u) => ({
       id: u.id,
       name: u.name,
-      email: u.email,
+      email: u.email || u.trialEmail, // trial users have no Google email
       image: u.image,
       role: u.role,
       createdAt: u.createdAt.toISOString(),
