@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { notifyPayout } from "@/lib/email";
 
 // GET /api/admin/payouts — list all payout requests
 export async function GET() {
@@ -142,6 +143,22 @@ export async function POST(req: NextRequest) {
       details: JSON.stringify({ payoutId, txHash, amount: payout.amount }),
     },
   });
+
+  // Notify the affiliate when their payout is processing or completed (best-effort)
+  if (action === "complete" || action === "process") {
+    const u = await prisma.user.findUnique({
+      where: { id: payout.userId },
+      select: { email: true },
+    });
+    if (u?.email) {
+      await notifyPayout(
+        u.email,
+        payout.amount,
+        action === "complete" ? "COMPLETED" : "PROCESSING",
+        txHash
+      );
+    }
+  }
 
   return NextResponse.json({ success: true, action });
 }

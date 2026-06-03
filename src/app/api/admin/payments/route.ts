@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { notifyNewCommission } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -155,6 +156,12 @@ export async function POST(req: NextRequest) {
       where: { id: referral.id },
       data: { totalEarned: { increment: commission } },
     });
+    // Notify the referrer they earned a commission (best-effort)
+    const referrer = await prisma.user.findUnique({
+      where: { id: referral.referrerId },
+      select: { email: true },
+    });
+    if (referrer?.email) await notifyNewCommission(referrer.email, commission);
   }
 
   await prisma.payment.update({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { cookies } from "next/headers";
+import { notifyNewReferral } from "@/lib/email";
 
 // POST /api/referral/track — called after signup to link referral
 export async function POST(req: NextRequest) {
@@ -64,6 +65,19 @@ export async function POST(req: NextRequest) {
       details: `Referred by: ${referralCode.code}`,
     },
   });
+
+  // Notify the referrer that someone signed up via their link (best-effort)
+  try {
+    const referrer = await prisma.user.findUnique({
+      where: { id: referralCode.userId },
+      select: { email: true },
+    });
+    const e = session.user.email;
+    const masked = e ? `${e.slice(0, 3)}***@${e.split("@")[1]}` : "một người dùng mới";
+    if (referrer?.email) await notifyNewReferral(referrer.email, masked);
+  } catch {
+    /* never block signup tracking on email failure */
+  }
 
   return NextResponse.json({ success: true, message: "Referral tracked!" });
 }
