@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+// VNPay & MoMo pricing in VND
+const PLANS_VND: Record<string, { label: string; usd: number; vnd: string }> = {
+  MONTHLY: { label: "Pro Monthly", usd: 9, vnd: "216.000" },
+  YEARLY: { label: "Pro Yearly", usd: 70, vnd: "1.680.000" },
+};
+
 // Receiving wallet — set NEXT_PUBLIC_USDT_WALLET in Vercel env vars
 const USDT_WALLET =
   process.env.NEXT_PUBLIC_USDT_WALLET || "TXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
@@ -24,6 +30,8 @@ export default function BillingPage() {
   const [usdtError, setUsdtError] = useState<string | null>(null);
   const [walletCopied, setWalletCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [vnpayPlan, setVnpayPlan] = useState("MONTHLY");
+  const [momoPlan, setMomoPlan] = useState("MONTHLY");
 
   const copyWallet = async () => {
     try {
@@ -101,6 +109,48 @@ export default function BillingPage() {
       }
     } catch {
       setUsdtError("Không thể kết nối server. Thử lại sau.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVnpayPayment = async (plan: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/payment/vnpay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || `Lỗi VNPay (HTTP ${res.status})`);
+      }
+    } catch {
+      alert("Không thể kết nối VNPay. Thử lại sau.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMomoPayment = async (plan: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/payment/momo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || `Lỗi MoMo (HTTP ${res.status})`);
+      }
+    } catch {
+      alert("Không thể kết nối MoMo. Thử lại sau.");
     } finally {
       setLoading(false);
     }
@@ -303,6 +353,80 @@ export default function BillingPage() {
               </div>
             </>
           )}
+        </div>
+
+        {/* VNPay Payment */}
+        <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
+          <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-1">
+            🏦 Pay with VNPay
+          </h2>
+          <p className="text-zinc-500 text-xs mb-4">
+            Thanh toán qua VNPay — ATM, Internet Banking, QR Code. Dành cho người dùng Việt Nam.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-xs font-bold block mb-2">Chọn gói</label>
+              <div className="flex gap-3">
+                {Object.entries(PLANS_VND).map(([key, plan]) => (
+                  <button
+                    key={key}
+                    onClick={() => setVnpayPlan(key)}
+                    className={`flex-1 p-3 rounded-xl text-sm font-bold border transition-colors ${
+                      vnpayPlan === key
+                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                        : "border-white/10 text-zinc-400 hover:border-white/20"
+                    }`}
+                  >
+                    {plan.label} — {plan.vnd} VND
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => handleVnpayPayment(vnpayPlan)}
+              disabled={loading}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+            >
+              {loading ? "Đang xử lý..." : `Thanh toán ${PLANS_VND[vnpayPlan].vnd} VND qua VNPay →`}
+            </button>
+          </div>
+        </div>
+
+        {/* MoMo Payment */}
+        <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
+          <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-1">
+            🔴 Pay with MoMo
+          </h2>
+          <p className="text-zinc-500 text-xs mb-4">
+            Thanh toán qua ví MoMo — quét QR hoặc dùng app MoMo. Dành cho người dùng Việt Nam.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-xs font-bold block mb-2">Chọn gói</label>
+              <div className="flex gap-3">
+                {Object.entries(PLANS_VND).map(([key, plan]) => (
+                  <button
+                    key={key}
+                    onClick={() => setMomoPlan(key)}
+                    className={`flex-1 p-3 rounded-xl text-sm font-bold border transition-colors ${
+                      momoPlan === key
+                        ? "border-pink-500/40 bg-pink-500/10 text-pink-400"
+                        : "border-white/10 text-zinc-400 hover:border-white/20"
+                    }`}
+                  >
+                    {plan.label} — {plan.vnd} VND
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => handleMomoPayment(momoPlan)}
+              disabled={loading}
+              className="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+            >
+              {loading ? "Đang xử lý..." : `Thanh toán ${PLANS_VND[momoPlan].vnd} VND qua MoMo →`}
+            </button>
+          </div>
         </div>
 
         {/* USDT Wallet (for affiliate payouts) */}
