@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import prisma from "@/lib/prisma";
+import { addCredits, TOKEN_PACKAGES } from "@/lib/tokens";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -19,6 +20,26 @@ export async function POST(req: NextRequest) {
       const session = event.data.object;
       const userId = session.metadata?.userId;
       if (!userId) break;
+
+      // ── Token purchase (one-time credit top-up) ──────────────────────────
+      if (session.metadata?.type === "token_purchase") {
+        const packageId = session.metadata?.packageId;
+        const pkg = TOKEN_PACKAGES.find((p) => p.id === packageId);
+        if (pkg) {
+          const totalCredits = pkg.credits + pkg.bonus;
+          await addCredits(
+            userId,
+            totalCredits,
+            "PURCHASE",
+            { description: `Mua gói ${pkg.name} (${pkg.credits.toLocaleString()} + ${pkg.bonus.toLocaleString()} bonus)`, refId: session.id },
+            prisma
+          );
+          await prisma.auditLog.create({
+            data: { userId, action: "token.purchased", details: `Package: ${pkg.name}, Credits: ${totalCredits}` },
+          });
+        }
+        break;
+      }
 
       await prisma.subscription.update({
         where: { userId },

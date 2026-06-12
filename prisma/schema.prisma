@@ -70,6 +70,8 @@ model User {
   payouts       Payout[]
   payments      Payment[]
   usdtWallet    String?        // TRC-20 USDT wallet address
+  tokenBalance    TokenBalance?
+  tokenTransactions TokenTransaction[]
 }
 
 enum UserRole {
@@ -283,4 +285,51 @@ model AuditLog {
   details   String?  @db.Text
   ipAddress String?
   createdAt DateTime @default(now())
+}
+
+// ========================
+// TOKEN / CREDIT SYSTEM
+// ========================
+model TokenBalance {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Int      @default(0)   // credits (1 credit = $0.001 USD)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TokenTransaction {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Int          // positive = credit, negative = debit
+  balanceAfter Int          // snapshot after transaction
+  type         TokenTxType
+  modelId      String?      // e.g. "gemini-2.0-flash"
+  appId        String?      // e.g. "flowveo"
+  description  String?
+  refId        String?      // payment/session reference
+  createdAt    DateTime     @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum TokenTxType {
+  PURCHASE   // mua bằng tiền
+  BONUS      // token khuyến mãi
+  USAGE      // dùng API (số âm)
+  AFFILIATE  // hoa hồng dưới dạng token
+  REFUND
+}
+
+model ServiceApiKey {
+  id        String   @id @default(cuid())
+  name      String   // "FlowVeo Production"
+  keyHash   String   @unique
+  appId     String   // "flowveo"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  lastUsed  DateTime?
 }
