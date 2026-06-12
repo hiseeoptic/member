@@ -18,3 +18,32 @@ export const PLANS = {
     trialDays: 15,
   },
 };
+
+// One-time products from nguyenduchoa.com/shop
+export const ONE_TIME_PRODUCTS: Record<string, { name: string; price: number; description: string }> = {
+  "ai-marketing-course": {
+    name: "Khóa học AI Marketing",
+    price: 9700, // $97 in cents
+    description: "Toàn bộ chiến lược AI Marketing từ A-Z — video, tài liệu, template",
+  },
+  "flowveo": {
+    name: "FlowVeo — Tạo Video AI",
+    price: 900,
+    description: "Subscription hàng tháng — FlowVeo AI Video Generator",
+  },
+  "thansohoc": {
+    name: "ThansOhoc — AI Content",
+    price: 900,
+    description: "Subscription hàng tháng — ThansOhoc AI Writing",
+  },
+  "ai-studio": {
+    name: "AI Studio — Tạo Hình Ảnh AI",
+    price: 900,
+    description: "Subscription hàng tháng — AI Studio Image Generator",
+  },
+  "bundle-all": {
+    name: "Bundle ALL Tools",
+    price: 1500,
+    description: "Toàn bộ 6 công cụ AI — FlowVeo, ThansOhoc, AI Studio, VinaLink, Content AI Writer, Storyboard AI",
+  },
+};
