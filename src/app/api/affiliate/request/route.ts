@@ -1,25 +1,32 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { addCredits } from "@/lib/tokens";
 
-const MIN_PAYOUT = 20; // minimum $20 to request payout
+const MIN_PAYOUT_USDT = 20;   // minimum $20 to request USDT payout
+const MIN_PAYOUT_TOKENS = 5;  // minimum $5 to convert to credits
+const TOKEN_BONUS_RATE = 0.1; // +10% bonus when taking payout as credits
 
 // POST /api/affiliate/request — request affiliate payout
-export async function POST() {
+// Body: { method?: "USDT" | "TOKENS" } — default USDT
+export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const userId = session.user.id;
+  const body = await req.json().catch(() => ({}));
+  const method: "USDT" | "TOKENS" = body.method === "TOKENS" ? "TOKENS" : "USDT";
+  const minPayout = method === "TOKENS" ? MIN_PAYOUT_TOKENS : MIN_PAYOUT_USDT;
 
-  // Check wallet
+  // Check wallet (only needed for USDT)
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { usdtWallet: true },
   });
 
-  if (!user?.usdtWallet) {
+  if (method === "USDT" && !user?.usdtWallet) {
     return NextResponse.json(
       { error: "Please set your USDT wallet address in Billing settings first." },
       { status: 400 }
@@ -60,20 +67,72 @@ export async function POST() {
 
   const totalAmount = approvedCommissions.reduce((sum, c) => sum + c.amount, 0);
 
-  if (totalAmount < MIN_PAYOUT) {
+  if (totalAmount < minPayout) {
     return NextResponse.json(
-      { error: `Minimum payout is $${MIN_PAYOUT}. Your current balance is $${totalAmount.toFixed(2)}.` },
+      { error: `Minimum payout is $${minPayout}. Your current balance is $${totalAmount.toFixed(2)}.` },
       { status: 400 }
     );
   }
 
-  // Create payout request and link commissions
+  const roundedAmount = Math.round(totalAmount * 100) / 100;
+
+  // ── TOKENS: instant conversion to credits (+10% bonus) ─────────────────────
+  if (method === "TOKENS") {
+    const credits = Math.floor(roundedAmount * 1000 * (1 + TOKEN_BONUS_RATE)); // $1 = 1,000 credits
+
+    const payout = await prisma.payout.create({
+      data: {
+        userId,
+        amount: roundedAmount,
+        walletAddress: "TOKEN_CREDITS",
+        status: "COMPLETED",
+        processedAt: new Date(),
+      },
+    });
+
+    await prisma.commission.updateMany({
+      where: { id: { in: approvedCommissions.map((c) => c.id) } },
+      data: { payoutId: payout.id, status: "PAID" },
+    });
+
+    await addCredits(
+      userId,
+      credits,
+      "AFFILIATE",
+      {
+        description: `Hoa hồng affiliate $${roundedAmount.toFixed(2)} → credits (+10% bonus)`,
+        refId: payout.id,
+      },
+      prisma
+    );
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: "payout.tokens",
+        details: JSON.stringify({
+          payoutId: payout.id,
+          amount: roundedAmount,
+          credits,
+          commissionCount: approvedCommissions.length,
+        }),
+      },
+    });
+
+    return NextResponse.json({
+      message: `Converted $${roundedAmount.toFixed(2)} to ${credits.toLocaleString()} credits (incl. 10% bonus) — added to your balance instantly!`,
+      payoutId: payout.id,
+      credits,
+    });
+  }
+
+  // ── USDT: manual payout within 48h ─────────────────────────────────────────
   const payout = await prisma.payout.create({
     data: {
       userId,
-      amount: Math.round(totalAmount * 100) / 100,
-      usdtAmount: Math.round(totalAmount * 100) / 100, // 1:1 USD to USDT
-      walletAddress: user.usdtWallet,
+      amount: roundedAmount,
+      usdtAmount: roundedAmount, // 1:1 USD to USDT
+      walletAddress: user!.usdtWallet!,
       status: "PENDING",
     },
   });
@@ -97,7 +156,7 @@ export async function POST() {
       details: JSON.stringify({
         payoutId: payout.id,
         amount: payout.amount,
-        wallet: user.usdtWallet,
+        wallet: user!.usdtWallet,
         commissionCount: approvedCommissions.length,
       }),
     },

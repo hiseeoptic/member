@@ -125,6 +125,9 @@ export default function DashboardPage() {
             <span className="font-black text-white tracking-tight">Auto Flow Pro</span>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/tokens" className="text-purple-400 hover:text-purple-300 text-xs font-semibold transition-colors">
+              Credits
+            </Link>
             <Link href="/affiliate" className="text-zinc-400 hover:text-white text-xs font-semibold transition-colors">
               Affiliate
             </Link>

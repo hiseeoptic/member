@@ -60,10 +60,14 @@ export default function AffiliatePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const requestPayout = async () => {
+  const requestPayout = async (method: "USDT" | "TOKENS") => {
     setRequesting(true);
     setRequestMsg("");
-    const res = await fetch("/api/affiliate/request", { method: "POST" });
+    const res = await fetch("/api/affiliate/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method }),
+    });
     const result = await res.json();
     setRequestMsg(result.message || result.error);
     setRequesting(false);
@@ -134,30 +138,55 @@ export default function AffiliatePage() {
 
         {/* Payout Request */}
         <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider">Request Payout</h2>
-              <p className="text-zinc-600 text-xs mt-1">
-                Minimum: ${data.minPayout} USDT • Wallet: {data.usdtWallet ? `${data.usdtWallet.slice(0, 8)}...${data.usdtWallet.slice(-4)}` : "Not set"}
+          <h2 className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-4">Request Payout</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* USDT option */}
+            <div className="border border-white/10 rounded-xl p-5 flex flex-col">
+              <div className="text-white font-bold text-sm mb-1">💵 Rút tiền USDT</div>
+              <p className="text-zinc-500 text-xs mb-1">
+                Tối thiểu ${data.minPayout} • TRC-20 • Xử lý trong 48h
               </p>
+              <p className="text-zinc-600 text-xs mb-4 flex-1">
+                Wallet: {data.usdtWallet ? `${data.usdtWallet.slice(0, 8)}...${data.usdtWallet.slice(-4)}` : "Chưa cài đặt"}
+              </p>
+              <button
+                onClick={() => requestPayout("USDT")}
+                disabled={requesting || data.pendingPayout < data.minPayout || !data.usdtWallet}
+                className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {requesting ? "Processing..." : `Rút $${data.pendingPayout.toFixed(2)} USDT`}
+              </button>
+              {!data.usdtWallet && (
+                <Link href="/billing" className="text-indigo-400 text-xs font-semibold hover:underline mt-2">
+                  → Cài đặt ví USDT trong Billing
+                </Link>
+              )}
             </div>
-            <button
-              onClick={requestPayout}
-              disabled={requesting || data.pendingPayout < data.minPayout || !data.usdtWallet}
-              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {requesting ? "Processing..." : `Withdraw $${data.pendingPayout.toFixed(2)}`}
-            </button>
+
+            {/* Token credits option */}
+            <div className="border border-purple-500/30 bg-purple-500/5 rounded-xl p-5 flex flex-col">
+              <div className="text-white font-bold text-sm mb-1">
+                🪙 Đổi sang Credits <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold ml-1">+10% BONUS</span>
+              </div>
+              <p className="text-zinc-500 text-xs mb-1">
+                Tối thiểu $5 • Nhận ngay lập tức • Không cần ví
+              </p>
+              <p className="text-zinc-600 text-xs mb-4 flex-1">
+                ${data.pendingPayout.toFixed(2)} → {Math.floor(data.pendingPayout * 1000 * 1.1).toLocaleString()} credits
+              </p>
+              <button
+                onClick={() => requestPayout("TOKENS")}
+                disabled={requesting || data.pendingPayout < 5}
+                className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {requesting ? "Processing..." : "Đổi sang Credits ngay"}
+              </button>
+            </div>
           </div>
           {requestMsg && (
-            <div className={`text-sm font-semibold mt-2 ${requestMsg.includes("success") ? "text-green-400" : "text-red-400"}`}>
+            <div className={`text-sm font-semibold mt-4 ${/success|credits/i.test(requestMsg) ? "text-green-400" : "text-red-400"}`}>
               {requestMsg}
             </div>
-          )}
-          {!data.usdtWallet && (
-            <Link href="/billing" className="text-indigo-400 text-xs font-semibold hover:underline">
-              → Set up your USDT wallet in Billing settings
-            </Link>
           )}
         </div>
 
