@@ -93,9 +93,18 @@ interface PaymentRow {
   createdAt: string;
 }
 
+interface ApiKeyRow {
+  id: string;
+  name: string;
+  appId: string;
+  isActive: boolean;
+  createdAt: string;
+  lastUsed: string | null;
+}
+
 export default function AdminPage() {
   const { status } = useSession();
-  const [tab, setTab] = useState<"overview" | "users" | "affiliates" | "payments" | "payouts">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "affiliates" | "payments" | "payouts" | "apikeys">("overview");
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [affiliates, setAffiliates] = useState<AffiliateRow[]>([]);
@@ -107,6 +116,10 @@ export default function AdminPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [txHashInput, setTxHashInput] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKeyRow[]>([]);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyAppId, setNewKeyAppId] = useState("");
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") redirect("/login");
@@ -116,8 +129,45 @@ export default function AdminPage() {
       loadAffiliates();
       loadPayouts();
       loadPayments();
+      loadApiKeys();
     }
   }, [status]);
+
+  const loadApiKeys = () =>
+    fetch("/api/admin/api-keys")
+      .then((r) => r.json())
+      .then((d) => setApiKeys(d.keys || []))
+      .catch(() => {});
+
+  const createApiKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newKeyName || !newKeyAppId) return;
+    setActionLoading("apikey-create");
+    const res = await fetch("/api/admin/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newKeyName, appId: newKeyAppId }),
+    });
+    const data = await res.json();
+    setActionLoading(null);
+    if (data.key) {
+      setCreatedKey(data.key);
+      setNewKeyName("");
+      setNewKeyAppId("");
+      loadApiKeys();
+    }
+  };
+
+  const toggleApiKey = async (id: string, isActive: boolean) => {
+    setActionLoading(id);
+    await fetch("/api/admin/api-keys", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, isActive: !isActive }),
+    });
+    setActionLoading(null);
+    loadApiKeys();
+  };
 
   const loadAffiliates = () =>
     fetch("/api/admin/affiliates")
@@ -307,7 +357,7 @@ export default function AdminPage() {
             <span className="text-white font-black">Admin Panel</span>
           </div>
           <div className="flex gap-1 bg-zinc-900 rounded-xl p-1">
-            {(["overview", "users", "affiliates", "payments", "payouts"] as const).map((t) => (
+            {(["overview", "users", "affiliates", "payments", "payouts", "apikeys"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -315,7 +365,7 @@ export default function AdminPage() {
                   tab === t ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
+                {t === "apikeys" ? "API Keys" : t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
@@ -806,6 +856,114 @@ export default function AdminPage() {
               {payouts.length === 0 && (
                 <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 text-center text-zinc-500 text-sm">
                   No payout requests yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== API KEYS ===== */}
+        {tab === "apikeys" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-white font-bold">Service API Keys</h2>
+              <p className="text-zinc-500 text-xs mt-1">
+                Key cho từng webapp gọi <code className="text-zinc-400">/api/tokens/consume</code> để trừ credits. Xem docs/TOKEN_INTEGRATION.md
+              </p>
+            </div>
+
+            {/* Create form */}
+            <form onSubmit={createApiKey} className="bg-zinc-900/50 border border-white/10 rounded-2xl p-5 flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[180px]">
+                <label className="text-zinc-500 text-xs font-bold block mb-1.5">Tên key</label>
+                <input
+                  type="text"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="FlowVeo Production"
+                  className="w-full bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/40 focus:outline-none"
+                />
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <label className="text-zinc-500 text-xs font-bold block mb-1.5">App ID</label>
+                <input
+                  type="text"
+                  value={newKeyAppId}
+                  onChange={(e) => setNewKeyAppId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="flowveo"
+                  className="w-full bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-indigo-500/40 focus:outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={actionLoading === "apikey-create" || !newKeyName || !newKeyAppId}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-40"
+              >
+                {actionLoading === "apikey-create" ? "Creating..." : "+ Tạo key"}
+              </button>
+            </form>
+
+            {/* Newly created key — shown once */}
+            {createdKey && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5">
+                <div className="text-amber-400 font-bold text-sm mb-2">
+                  ⚠️ Lưu key này ngay — sẽ không hiển thị lại!
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-zinc-900 text-amber-300 px-4 py-3 rounded-xl font-mono text-sm break-all border border-amber-500/20">
+                    {createdKey}
+                  </code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(createdKey); }}
+                    className="px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shrink-0"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => setCreatedKey(null)}
+                    className="px-4 py-3 text-zinc-400 hover:text-white text-xs font-bold shrink-0"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Keys list */}
+            <div className="space-y-3">
+              {apiKeys.map((k) => (
+                <div key={k.id} className="bg-zinc-900/50 border border-white/10 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-sm">{k.name}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        k.isActive ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"
+                      }`}>
+                        {k.isActive ? "ACTIVE" : "DISABLED"}
+                      </span>
+                    </div>
+                    <div className="text-zinc-500 text-xs mt-1">
+                      App: <code className="text-zinc-400">{k.appId}</code>
+                      {" · "}Tạo: {new Date(k.createdAt).toLocaleDateString()}
+                      {" · "}Dùng lần cuối: {k.lastUsed ? new Date(k.lastUsed).toLocaleString() : "Chưa dùng"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleApiKey(k.id, k.isActive)}
+                    disabled={actionLoading === k.id}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 ${
+                      k.isActive
+                        ? "bg-red-600/20 hover:bg-red-600/30 text-red-400"
+                        : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400"
+                    }`}
+                  >
+                    {k.isActive ? "Vô hiệu hoá" : "Kích hoạt"}
+                  </button>
+                </div>
+              ))}
+              {apiKeys.length === 0 && (
+                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 text-center text-zinc-500 text-sm">
+                  Chưa có API key nào. Tạo key đầu tiên cho webapp của bạn.
                 </div>
               )}
             </div>
